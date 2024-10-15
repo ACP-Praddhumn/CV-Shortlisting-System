@@ -1,100 +1,120 @@
 from dotenv import load_dotenv
-
-load_dotenv()
 import base64
-import streamlit as st
+import streamlit as st  
 import os
 import io
 from PIL import Image
 import pdf2image
 import google.generativeai as genai
+import json
+
+
+
+load_dotenv()
+
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def get_gemini_response(input, pdf_content, prompt):
+
+def get_gemini_response(file_content, prompt):
     model = genai.GenerativeModel('gemini-1.5-flash')
-    response = model.generate_content([input, pdf_content[0], prompt])
-    return response.text
+    response = model.generate_content([file_content[0], prompt])
+    
+    
+    try:
+        response_json = json.loads(response.text)  
+        return response_json
+    except json.JSONDecodeError:
+        
+        # st.error("Failed to parse the response as JSON. Displaying raw output.")
+        return response.text
 
-def input_pdf_setup(uploaded_file):
+
+def input_file_setup(uploaded_file, file_type):
     if uploaded_file is not None:
-        ## Convert the PDF to image
-        images = pdf2image.convert_from_bytes(uploaded_file.read())
-        first_page = images[0]
+        if file_type == 'pdf':
+            
+            images = pdf2image.convert_from_bytes(uploaded_file.read())
+            first_page = images[0]
 
-        # Convert to bytes
-        img_byte_arr = io.BytesIO()
-        first_page.save(img_byte_arr, format='JPEG')
-        img_byte_arr = img_byte_arr.getvalue()
+            
+            img_byte_arr = io.BytesIO()
+            first_page.save(img_byte_arr, format='JPEG')
+            img_byte_arr = img_byte_arr.getvalue()
 
-        pdf_parts = [
+        elif file_type in ['jpg', 'jpeg', 'png']:
+            
+            image = Image.open(uploaded_file)
+
+          
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
+
+            
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='JPEG')  
+            img_byte_arr = img_byte_arr.getvalue()
+
+        
+        file_content = [
             {
                 "mime_type": "image/jpeg",
-                "data": base64.b64encode(img_byte_arr).decode()  # encode to base64
+                "data": base64.b64encode(img_byte_arr).decode()  
             }
         ]
-        return pdf_parts
+        return file_content
     else:
         raise FileNotFoundError("No file uploaded")
 
-## Streamlit App
 
-st.set_page_config(page_title="ATS Resume Expert")
-st.header("ATS Tracking System")
+st.set_page_config(page_title="Invoice Parsing System")
+st.header("Invoice Parsing System")
 
-input_text = st.text_area("Job Description: ", key="input")
-uploaded_file = st.file_uploader("Upload your resume(PDF)...", type=["pdf"])
+
+uploaded_file = st.file_uploader("Upload your Invoice (PDF, JPG, JPEG, PNG)...", type=["pdf", "jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    st.write("PDF Uploaded Successfully")
+    st.write("File Uploaded Successfully")
 
-submit1 = st.button("Resume Evaluation")  # More descriptive button text
-submit2 = st.button("Skill Improvement Suggestions")
-submit3 = st.button("Percentage Match & Missing Keywords")
 
-input_prompt1 = """
-You are an experienced Technical Human Resource Manager, tasked with reviewing the provided resume against the job description.
-Please share your professional evaluation on whether the candidate's profile aligns with the role.
-Highlight the candidate's strengths and areas for improvement based on the job requirements.
+submit1 = st.button("Extract Invoice Details")
+
+
+input_prompt = """
+You are an expert in reading and extracting important details from invoices. Please extract the following details from the uploaded invoice and return them in a valid JSON format:
+- Order No.
+- Ref
+- Sanskrit Id
+- Date
+- GSTIN
+- Credits Required
+- Handling Cost
+- Total Cost
+- Unit Price, Quantity, Total Price, IGST, and Total Price inclusive of all taxes
+- Invoice To and Ship To addresses
+
+Make sure the JSON is well-formed and includes no extra commentary or text.
+Make json response as an object named Product . Give output in multiple lines.
 """
 
-input_prompt2 = """
-You are a skilled career advisor with deep knowledge of in-demand skills. Based on the provided job description
-and the candidate's resume, identify areas where the candidate can improve their skills to become a more
-competitive applicant. Offer specific suggestions for skill development.
-"""
-
-input_prompt3 = """
-You are an expert ATS (Applicant Tracking System) scanner with a sophisticated understanding of data science and ATS functionality.
-Your task is to evaluate the resume against the provided job description.
-- Provide a percentage match between the resume and job description.
-- Identify any keywords that are missing from the resume but are present in the job description.
-- Offer final thoughts on the resume's suitability for the job.
-"""
 
 if submit1:
     if uploaded_file is not None:
-        pdf_content = input_pdf_setup(uploaded_file)
-        response = get_gemini_response(input_prompt1, pdf_content, input_text)
-        st.subheader("Resume Evaluation")
-        st.write(response)
-    else:
-        st.write("Please upload the resume")
+        
+        file_type = uploaded_file.name.split('.')[-1].lower()
 
-elif submit2:
-    if uploaded_file is not None:
-        pdf_content = input_pdf_setup(uploaded_file)
-        response = get_gemini_response(input_prompt2, pdf_content, input_text)
-        st.subheader("Skill Improvement Suggestions")
-        st.write(response)
-    else:
-        st.write("Please upload the resume")
+        
+        file_content = input_file_setup(uploaded_file, file_type)
 
-elif submit3:
-    if uploaded_file is not None:
-        pdf_content = input_pdf_setup(uploaded_file)
-        response = get_gemini_response(input_prompt3, pdf_content, input_text)
-        st.subheader("Percentage Match & Missing Keywords")
-        st.write(response)
+        
+        response = get_gemini_response(file_content, input_prompt)
+
+        
+        if isinstance(response, dict):  
+            st.subheader("Extracted Invoice Details (JSON):")
+            st.json(response)
+        else:
+            st.subheader("Extracted Invoice Details (JSON):")
+            st.write(response)  
     else:
-        st.write("Please upload the resume")
+        st.write("Please upload the invoice")
