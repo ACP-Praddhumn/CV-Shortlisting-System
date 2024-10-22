@@ -1,4 +1,6 @@
-streamlit
-google-generativeai
+fastapi
+uvicorn
 python-dotenv
-pdf2image
+Pillow
+google-generativeai
+PyMuPDF
