@@ -5,4 +5,5 @@ python-dotenv
 pdf2image
 Pillow
 PyMuPDF
+python-multipart
 
