@@ -4,29 +4,28 @@ import base64
 import os
 import io
 from PIL import Image
-import fitz  # PyMuPDF
+import fitz  
 import google.generativeai as genai
 import json
-from typing import List
 
 app = FastAPI()
 
-# Load environment variables
+
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# API key for authentication
-API_KEY = os.getenv("API_KEY")  # Define API key in your .env file
 
-# Dependency to verify API key
+API_KEY = os.getenv("API_KEY")  
+
+
 def verify_api_key(api_key: str):
     if api_key != API_KEY:
         raise HTTPException(status_code=403, detail="Invalid API Key")
 
-# Helper function to process the uploaded files
+
 def input_file_setup(uploaded_file: UploadFile, file_type: str):
     try:
-        file_content = []  # To hold images for all pages
+        file_content = []  
         if file_type == 'pdf':
             pdf_document = fitz.open(stream=uploaded_file.file.read(), filetype="pdf")
             for page_num in range(len(pdf_document)):
@@ -53,7 +52,7 @@ def input_file_setup(uploaded_file: UploadFile, file_type: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {e}")
 
-# Gemini AI call
+
 def get_gemini_response(file_content, prompt):
     model = genai.GenerativeModel('gemini-1.5-flash')
     response = model.generate_content([page for page in file_content] + [prompt])
@@ -63,12 +62,12 @@ def get_gemini_response(file_content, prompt):
     except json.JSONDecodeError:
         return response.text
 
-# API route
+
 @app.post("/parse-invoice/")
 async def parse_invoice(api_key: str = Depends(verify_api_key), file: UploadFile = File(...)):
     file_type = file.filename.split('.')[-1].lower()
     file_content = input_file_setup(file, file_type)
-    
+
     prompt = """
     You are an expert in reading and extracting important details from invoices. Please extract the following details from the uploaded invoice and return them in a valid JSON format:
 {
@@ -121,8 +120,7 @@ Make json response as an object. Give output in multiple lines. The given format
     response = get_gemini_response(file_content, prompt)
     return {"data": response}
 
-# Health check endpoint
+
 @app.get("/health/")
 def health_check():
     return {"status": "API is up and running"}
-
