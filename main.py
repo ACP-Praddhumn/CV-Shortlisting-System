@@ -83,7 +83,6 @@ def get_gemini_response(file_content, prompt):
     # Remove unwanted prefix using regular expressions
     cleaned_response = re.sub(r"^[\s\S]*?({)", r"\1", cleaned_response)  # Match any characters followed by "{"
     cleaned_response = cleaned_response[:-3]
-    print("cleaned response : ",cleaned_response)
 
     if not cleaned_response:
         raise HTTPException(status_code=500, detail="Empty response from Gemini")
